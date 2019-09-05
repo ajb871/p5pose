@@ -167,8 +167,10 @@ function draw() {}
 function drawPoses(poses) {
   p5.translate(width, 0); // move to far corner
 
-  p5.scale(-1.0, 1.0);
-  p5.image(video, 0, 0, video.width, video.height);
+  p5.scale(-1.0, 1.0); //p5.image(video, 0, 0, video.width, video.height);
+
+  p5.fill(255);
+  p5.rect(0, 0, width, height);
   drawKeypoints(poses);
   drawSkeleton(poses);
 } // Draw ellipses over the detected keypoints
@@ -180,7 +182,7 @@ function drawKeypoints(poses) {
       if (keypoint.score > 0.2) {
         p5.fill(0, 255, 0);
         p5.noStroke();
-        p5.ellipse(keypoint.position.x, keypoint.position.y, 30, 10);
+        p5.ellipse(keypoint.position.x, keypoint.position.y, 5, 5);
       }
     });
   });
@@ -254,7 +256,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "58772" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "58860" + '/');
 
   ws.onmessage = function (event) {
     checkedAssets = {};
