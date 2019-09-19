@@ -142,11 +142,13 @@ var height = 480 * scale; // setSketch sets this
 
 var p5; //logging data
 
-var label; //analyzing speed
-
-var points; // setup initializes this
+var label; // setup initializes this
 
 var video;
+var osc; //Pose vars
+
+var preveyePos;
+var prevPose;
 
 function setSketch(sketch) {
   p5 = sketch;
@@ -154,6 +156,7 @@ function setSketch(sketch) {
 
 function setup() {
   p5.createCanvas(width, height);
+  p5.background(0);
   video = p5.select('video') || p5.createCapture(p5.VIDEO);
   video.size(width, height); // Create a new poseNet method with a single detection
 
@@ -167,7 +170,18 @@ function setup() {
 
   label = p5.createDiv();
   label.position(5, height + 50);
-  label.style('font-size', '12pt');
+  label.style('font-size', '12pt'); //init audio button
+
+  var audioButton = p5.createButton('click to start audio');
+  audioButton.position(5, height + 100);
+  audioButton.mouseClicked(function () {
+    p5.userStartAudio().then(function () {
+      audioButton.remove();
+      osc = new window.p5.Oscillator(); // now you can call osc methods to make sound happen
+
+      osc.start();
+    });
+  });
 }
 
 function draw() {}
@@ -175,34 +189,132 @@ function draw() {}
 function drawPoses(poses) {
   p5.translate(width, 0); // move to far corner
 
-  p5.scale(-1.0, 1.0); //p5.image(video, 0, 0, video.width, video.height);
+  p5.scale(-1.0, 1.0); //p5.tint(255, 100);
 
-  p5.fill(0, 100);
-  p5.rect(0, 0, width, height);
+  p5.image(video, 0, 0, video.width, video.height); //p5.fill(0,10);
+  // p5.rect(0,0,width,height);
 
-  if (poses.length > 0) {
-    var pose = poses[0].pose; //console.log('Score =', pose.score);
+  readSpeed(poses); //drawKeypoints(poses);
+  //drawSkeleton(poses);
+  //playAudio(poses);
+} //want to eventually detect speed, direction, and distance from camera
+//(distance between eyes/shoulders/hips..etc)
+//Right now I'm only use Xpos of Left eye on ONE pose to evealuate spped (testing purposes)
+//will need to flush out system to work for multiple joints AND multiple poses(arrays baybey)
+//Function to read and compare speeds of pose keypoints
 
-    label.html('Score = ' + JSON.stringify(pose.keypoints));
+
+function readSpeed(poses) {
+  if (poses.length == 0) {
+    //return if no poses
+    return;
+  } //get vars from pose[0]
+
+
+  var pose = poses[0];
+
+  if (prevPose == undefined) {
+    prevPose = pose;
+    return;
   }
 
-  drawKeypoints(poses);
-  drawSkeleton(poses);
-} // Draw ellipses over the detected keypoints
+  pose.pose.keypoints.forEach(function (keypoint, index) {
+    var prevKeypoint = prevPose.pose.keypoints[index]; //Calc difference (distance moved)    
+
+    var dif = Math.abs(prevKeypoint.position.x - keypoint.position.x);
+    var dir; //I'm going to remember how to use vectors(?) and trig to find the direction of movement
+
+    keypoint.dif = dif; //append to pose
+  });
+  prevPose = pose; //set current pose to previous
+
+  /* //Testing code with just leftEye position
+  const eye = pose[1];
+  const eyePos = eye.position;
+  label.html('LeftEye: ' + JSON.stringify(eyePos));
+  if(preveyePos == undefined){ //return if no prev ref
+   preveyePos = eyePos;
+   return;
+  }
+  //calculate difference (distance moved)
+  let eyedif = Math.abs(preveyePos.x - eyePos.x);
+  preveyePos = eyePos;
+  */
+
+  drawKeypoints(pose); //would like to replace function with "update Keypoints"
+  //Next Steps:
+  //Create array of PREVIOUS pose[0](or pose[n] eventually) keypoint positions
+  //Array of vectors {(x,y),(x,y)...}
+  //use a loop to go through this array 
+  //instead of "analyzed poses" loop, just append speed,dir+distance to end of org poses array, and pass that to drawKeypoints
+}
+
+function drawKeypoints(pose) {
+  //pose drawing
+  pose.pose.keypoints.forEach(function (keypoint, index) {
+    //Create vars for radius and color from dif values
+    var dif = keypoint.dif;
+    var fill = p5.color(5.0 * dif, 0, 10.0 * dif);
+    var r = 5.0 + dif * 1.3;
+
+    if (keypoint.score > 0.5) {
+      p5.fill(fill);
+      p5.noStroke();
+      p5.ellipse(keypoint.position.x, keypoint.position.y, r, r);
+    }
+  });
+  pose.pose.keypoints.forEach(function (keypoint) {
+    pose.pose.keypoints.forEach(function (keypoint2) {
+      p5.stroke(0, 0, keypoint.dif * 10.0);
+      p5.line(keypoint.position.x, keypoint.position.y, keypoint2.position.x, keypoint2.position.y);
+    });
+  });
+  drawEyes(pose); // pose.skeleton.forEach((skeleton) => {
+  //       const [p1, p2] = skeleton;
+  //       p5.stroke(255, 0, 0);
+  //       p5.line(p1.position.x, p1.position.y, p2.position.x, p2.position.y);
+  //       // p5.quad(p1.position.x,p1.position.y,p2.position.x,p2.position.y,p2.position.x,p2.position.y+10,p1.position.x,p1.position.y+10);
+  // });
+}
+
+function drawEyes(pose) {
+  var leftEye = pose.pose.keypoints[1].position;
+  var rightEye = pose.pose.keypoints[2].position;
+  var distance = Math.abs(leftEye.x - rightEye.x);
+  var r = distance / 2;
+  var a = Math.atan2(leftEye.y - rightEye.y, leftEye.x - rightEye.x);
+  p5.push();
+  p5.translate(leftEye.x, leftEye.y);
+  p5.rotate(a);
+  p5.fill(255);
+  p5.ellipse(0, 0, r, r / 2);
+  p5.fill(0);
+  p5.ellipse(0, 0, r / 4, r / 4);
+  p5.pop();
+  p5.push();
+  p5.translate(rightEye.x, rightEye.y);
+  p5.rotate(a);
+  p5.fill(255);
+  p5.ellipse(0, 0, r, r / 2);
+  p5.fill(0);
+  p5.ellipse(0, 0, r / 4, r / 4);
+  p5.pop();
+} /////////////////////////////////////////////////////////
+// Draw ellipses over the detected keypoints
 
 
-function drawKeypoints(poses) {
+function drawKeypointsOld(poses) {
   poses.forEach(function (pose) {
     return pose.pose.keypoints.forEach(function (keypoint) {
       if (keypoint.score > 0.5) {
-        p5.fill(180, 0, 190);
+        p5.fill(255); //If difference(speed if aboce a threshold, draw as RED)
+
+        if (keypoint.dif > 15.0) {
+          p5.fill(255, 0, 0);
+        }
+
         p5.noStroke();
         p5.ellipse(keypoint.position.x, keypoint.position.y, 5, 5); //Not my favorite way of doing this, but having trouble with
-
-        if (keypoint.part == 'nose') {
-          p5.fill(255, 0, 0);
-          p5.ellipse(keypoint.position.x, keypoint.position.y, 40, 40);
-        }
 
         if (keypoint.part == 'rightEye' || keypoint.part == 'leftEye') {
           p5.fill(255);
@@ -213,7 +325,8 @@ function drawKeypoints(poses) {
       }
     });
   });
-}
+} //Other interests: rendering different kinds of bodies / forms (blobs/shapes other than skeleton)
+
 
 function drawSkeleton(poses) {
   poses.forEach(function (pose) {
@@ -223,10 +336,31 @@ function drawSkeleton(poses) {
           p2 = _skeleton[1];
 
       p5.stroke(255, 0, 0);
-      p5.line(p1.position.x, p1.position.y, p2.position.x, p2.position.y);
-      p5.quad(p1.position.x, p1.position.y, p2.position.x, p2.position.y, p1.position.x, p1.position.y + 70, p2.position.x, p2.position.y + 70);
+      p5.line(p1.position.x, p1.position.y, p2.position.x, p2.position.y); //p5.quad(p1.position.x,p1.position.y,p2.position.x,p2.position.y,p2.position.x,p2.position.y+10,p1.position.x,p1.position.y+10);
     });
   });
+} // Audio from in-class demos
+
+
+function playAudio(poses) {
+  if (poses.length == 0) {
+    return;
+  }
+
+  if (!osc) {
+    return;
+  }
+
+  var pose = poses[0].pose;
+  var keypoints = pose.keypoints; //calculate distance between hands(wrists)
+
+  var leftWrist = keypoints[9].position;
+  var rightWrist = keypoints[10].position;
+  var distance = Math.abs(rightWrist.x - leftWrist.x);
+  var avgHeight = (leftWrist.y + rightWrist.y) / 2;
+  var scaled = distance / width; //console.info(distance);
+
+  osc.freq(440 * scaled);
 }
 },{}],"index.js":[function(require,module,exports) {
 "use strict";
@@ -284,7 +418,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "64231" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "55334" + '/');
 
   ws.onmessage = function (event) {
     checkedAssets = {};
