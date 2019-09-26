@@ -23,7 +23,7 @@ export function setSketch(sketch) {
 }
 
 export function setup() {
-  p5.createCanvas(width, height);
+  p5.createCanvas(width*2, height);
   p5.background(0);
   video = p5.select('video') || p5.createCapture(p5.VIDEO);
   video.size(width, height);
@@ -48,7 +48,7 @@ export function draw() {
 }
 
 function drawPoses(poses) {
-  p5.translate(width, 0); // move to far corner
+  p5.translate(width*1.5, 0); // move to far corner
   p5.scale(-1.0, 1.0);
 
   // Uses poses number to alter background
@@ -92,11 +92,23 @@ function readSpeed(poses){
     }
 
     pose.pose.keypoints.forEach(function (keypoint, index2){
+      //Set prev position to evaluate change in position
       let prevKeypoint = prevPoses[index].pose.keypoints[index2];
-      //Calc difference (distance moved)    
-      let dif = prevKeypoint.position.x - keypoint.position.x;
-      let dir; //I'm going to remember how to use vectors(?) and trig to find the direction of movement
-      keypoint.dif = dif; //append this value to Pose
+
+      //Create p5 vectors for evaluating distance And direction
+      let preV = p5.createVector(prevKeypoint.position.x, prevKeypoint.position.y);
+      let newV = p5.createVector(keypoint.position.x, keypoint.position.y);
+
+      let dist = preV.dist(newV); //Calculate distance moved (total) 
+      //let direc = p5.degrees(preV.angleBetween(newV)); //Calculate angle between points
+      //let direc = p5.degrees(Math.atan2(preV.y - newV.y, preV.x - newV.x));
+      let direc = {'x' : newV.x - preV.x,
+                  'y' : newV.y - preV.y
+                  }; //Issues with vectors
+
+      //append these values to Pose/keypoints
+      keypoint.dist = dist;
+      keypoint.direc = direc;
       //by appening dif will be pased onto the DrawKeypoints to be easily read with a for loop
     });
     prevPoses[index] = pose; //set current pose to previous
@@ -127,18 +139,40 @@ function drawKeypoints(pose) {
 
   pose.pose.keypoints.forEach(function (keypoint,index){
       //Create vars for radius and color from dif values
-      let dif = keypoint.dif;
-      let fill = p5.color(5.0*Math.abs(dif),0,10.0*Math.abs(dif)); //Speed determine fill color
-      let r = 5.0 + (dif*1.3); //Size -> Speed direct relationship
+      let dist = keypoint.dist;
+      let direc = keypoint.direc;
+      //console.log(index + ' : ' + direc);
+      
+      //debug for dist
+      p5.push();
+      p5.translate(keypoint.position.x,keypoint.position.y);
+      p5.scale(-1.0,1.0);
+      p5.fill(0);
+      p5.textSize(12);
+      //p5.text(p5.nf(direc,0,2),0,0);
+      p5.pop();
+      //debug for direc
+
+      let fill = p5.color(0);
+      let r = 5.0 + (dist*2.3); //Size -> Speed direct relationship
+
+      fill = p5.color(10.0*Math.abs(dist),0,5.0*Math.abs(dist)); //Speed determine fill color
+      if(direc.x < 0) {
+        fill = p5.color(0, 5.0*Math.abs(dist), 10.0*Math.abs(dist)); //Speed determine fill color
+      }
+
 
       if (keypoint.score > 0.5) {
         p5.fill(fill);
         p5.noStroke();
         p5.ellipse(keypoint.position.x, keypoint.position.y, r, r);
 
+        //Draw strokes between all other keypoints
         pose.pose.keypoints.forEach((keypoint2) => {
-        p5.stroke(0,0,Math.abs(dif)*10.0);
-        p5.line(keypoint.position.x, keypoint.position.y,keypoint2.position.x,keypoint2.position.y);
+          if (keypoint2.score > 0.5){ //Only "known" keypoints
+            p5.stroke(fill); //use same fill for better understanding
+            p5.line(keypoint.position.x, keypoint.position.y,keypoint2.position.x,keypoint2.position.y);
+          }
        })
       }
   });
@@ -177,9 +211,9 @@ function drawEyes(pose){
     p5.translate(eye.x, eye.y);
     p5.rotate(a);
     p5.fill(255);
-    p5.ellipse(0,0, r, r/2);
+    p5.ellipse(0,0, r, r/2); //whole eye
     p5.fill(0);
-    p5.ellipse(0,0, r/4, r/4);
+    p5.ellipse(0,0, r/4, r/4); //pupil
     p5.pop();
   });
 }
@@ -195,7 +229,7 @@ function drawKeypointsOld(poses) {
         p5.fill(255);
 
         //If difference(speed if aboce a threshold, draw as RED)
-        if(keypoint.dif > 15.0){
+        if(keypoint.dist > 15.0){
           p5.fill(255,0,0);
         }
         p5.noStroke();
